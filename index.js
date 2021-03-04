@@ -21,37 +21,6 @@ function isOriginAllowed (origin, allowedOrigin) {
   }
 }
 
-function configureOrigin (opts, req, rep) {
-  const rOrigin = req.headers.origin
-  const origin = opts.origin || '*'
-
-  if (origin === '*') {
-    rep.setHeader('Access-Control-Allow-Origin', '*')
-  } else if (isString(origin)) {
-    rep.setHeader('Access-Control-Allow-Origin', origin)
-    vary(rep, 'Origin')
-  } else {
-    const isAllowed = isOriginAllowed(rOrigin, origin)
-    rep.setHeader('Access-Control-Allow-Origin', isAllowed ? rOrigin : false)
-    vary(rep, 'Origin')
-  }
-}
-
-function configureCredentials (opts, req, rep) {
-  const credentials = opts.credentials || false
-  if (credentials === true) {
-    rep.setHeader('Access-Control-Allow-Credentials', true)
-  }
-}
-
-function configureExposedHeaders (opts, req, rep) {
-  let exposedHeaders = opts.exposedHeaders
-  if (exposedHeaders && exposedHeaders.join) {
-    exposedHeaders = exposedHeaders.join(',')
-    rep.setHeader('Access-Control-Expose-Headers', exposedHeaders)
-  }
-}
-
 module.exports = async function (smallify, opts) {
   const { $root } = smallify
   const optionsMethod = 'OPTIONS'
@@ -75,29 +44,51 @@ module.exports = async function (smallify, opts) {
     req = req.raw
     rep = rep.raw
 
-    configureOrigin.call(this, opts, req, rep)
-    configureCredentials.call(this, opts, req, rep)
-    configureExposedHeaders.call(this, opts, req, rep)
+    const rOrigin = req.headers.origin
+    const origin = opts.origin || '*'
+    const credentials = opts.credentials || false
+    const exposedHeaders = opts.exposedHeaders
+
+    if (origin === '*') {
+      rep.setHeader('Access-Control-Allow-Origin', '*')
+    } else if (isString(origin)) {
+      rep.setHeader('Access-Control-Allow-Origin', origin)
+      vary(rep, 'Origin')
+    } else {
+      const isAllowed = isOriginAllowed(rOrigin, origin)
+      rep.setHeader('Access-Control-Allow-Origin', isAllowed ? rOrigin : false)
+      vary(rep, 'Origin')
+    }
+
+    if (credentials === true) {
+      rep.setHeader('Access-Control-Allow-Credentials', true)
+    }
+
+    if (exposedHeaders) {
+      rep.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(','))
+    }
 
     if (method === optionsMethod) {
-      let methods = opts.methods || []
-      if (methods.join) {
-        methods = methods.join(',')
-      }
-      rep.setHeader('Access-Control-Allow-Methods', methods)
+      const methods = opts.methods
+      const headers = opts.headers
+      const maxAge = opts.maxAge
 
-      let headers = opts.headers
+      if (methods) {
+        rep.setHeader('Access-Control-Allow-Methods', methods.join(','))
+      }
+
+      let accessHeaders
       if (!headers) {
-        headers = req.headers['access-control-request-headers']
+        accessHeaders = req.headers['access-control-request-headers']
         vary(rep, 'Access-Control-Request-Headers')
       } else if (headers.join) {
-        headers = headers.join(',')
-      }
-      if (headers && headers.length) {
-        rep.setHeader('Access-Control-Allow-Headers', headers)
+        accessHeaders = headers.join(',')
       }
 
-      const maxAge = opts.maxAge
+      if (accessHeaders && accessHeaders.length) {
+        rep.setHeader('Access-Control-Allow-Headers', accessHeaders)
+      }
+
       if (maxAge) {
         rep.setHeader('Access-Control-Max-Age', maxAge + '')
       }
